@@ -519,11 +519,11 @@ contract RHODividendTracker is Ownable, DividendPayingToken {
         minimumTokenBalanceForDividends = 10000 * (10**18); //must hold 10000+ tokens
     }
 
-    function _transfer(address, address, uint256) internal override {
+    function _transfer(address, address, uint256) internal pure override {
         require(false, "RHO_Dividend_Tracker: No transfers allowed");
     }
 
-    function withdrawDividend() public override {
+    function withdrawDividend() public pure override {
         require(false, "RHO_Dividend_Tracker: withdrawDividend disabled. Use the 'claim' function on the main RHO contract.");
     }
 
