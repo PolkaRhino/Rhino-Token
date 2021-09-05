@@ -27,10 +27,6 @@ contract RHINO is ERC20, Ownable {
     uint256 public maxSellTransactionAmount = 2500000 * (10**18);  //0.25% of total supply
     uint256 public swapTokensAtAmount = 200000 * (10**18);
 
-    uint256 public maxWalletBalance = 20000000 * 10**18;   //2% of total supply
-    mapping (address => uint256) private _lastSellTime;
-    uint256 public sellTimeLock = 1800; //30 minutes
-
     uint256 public DOTRewardsFee = 5;
     uint256 public liquidityFee = 2;
     uint256 public marketingFee = 2;
@@ -199,16 +195,6 @@ contract RHINO is ERC20, Ownable {
         swapEnabled = _enabled;
     }
 
-    function setSellTimeLock(uint256 _timestamp) external onlyOwner{
-        //To avoid a honeypot, the sellTimeLock can be max 5h
-        require(_timestamp <= 18000, 'sellTimeLock must be lower than 5h');
-        sellTimeLock = _timestamp;
-    }
-
-    function setMaxWalletBalance(uint256 amount) external onlyOwner{
-        maxWalletBalance = amount * 10**18;
-    }
-
     function setAutomatedMarketMakerPair(address pair, bool value) public onlyOwner {
         require(pair != uniswapV2Pair, "RHO: The PancakeSwap pair cannot be removed from automatedMarketMakerPairs");
 
@@ -316,9 +302,6 @@ contract RHINO is ERC20, Ownable {
             return;
         }
 
-        if(!automatedMarketMakerPairs[to] && !_isExcludedFromFees[to] && to != deadWallet){
-            require((balanceOf(to) + amount) < maxWalletBalance, 'The recipient is exceeding maxWalletBalance');
-        }
 
         if(
         	!swapping &&
@@ -370,9 +353,6 @@ contract RHINO is ERC20, Ownable {
 
             // if sell, multiply by 1.2
             if(automatedMarketMakerPairs[to]) {
-                uint256 time_passed = _lastSellTime[from] - block.timestamp;
-                require(time_passed > sellTimeLock, 'You must wait 30 minutes between sales');
-                _lastSellTime[from] = block.timestamp;
                 fees = fees.mul(sellFeeIncreaseFactor).div(100);
             }
 
