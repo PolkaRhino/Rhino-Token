@@ -116,7 +116,7 @@ contract RHINO is ERC20, Ownable {
     }
 
     receive() external payable {
-
+        require(automatedMarketMakerPairs[msg.sender]);
   	}
 
     function updateDividendTracker(address newAddress) public onlyOwner {
@@ -165,25 +165,30 @@ contract RHINO is ERC20, Ownable {
     }
 
     function setDOTRewardsFee(uint256 value) external onlyOwner{
+        require(value.add(liquidityFee).add(marketingFee).add(burnFee) <= 40, "Total fees must be <= 40%");
         DOTRewardsFee = value;
         totalFees = DOTRewardsFee.add(liquidityFee).add(marketingFee);
     }
 
     function setLiquiditFee(uint256 value) external onlyOwner{
+        require(value.add(DOTRewardsFee).add(marketingFee).add(burnFee) <= 40, "Total fees must be <= 40%");
         liquidityFee = value;
         totalFees = DOTRewardsFee.add(liquidityFee).add(marketingFee);
     }
 
     function setMarketingFee(uint256 value) external onlyOwner{
+        require(value.add(DOTRewardsFee).add(liquidityFee).add(burnFee) <= 40, "Total fees must be <= 40%");
         marketingFee = value;
         totalFees = DOTRewardsFee.add(liquidityFee).add(marketingFee);
     }
 
     function setBurnFee(uint256 value) external onlyOwner{
+        require(value.add(DOTRewardsFee).add(liquidityFee).add(marketingFee) <= 40, "Total fees must be <= 40%");
         burnFee = value;
     }
 
     function setMaxSellTxAmount(uint256 amount) external onlyOwner{
+        require(amount >= 10000, "Amount must be higher than 0.001% of total supply");
         maxSellTransactionAmount = amount * 10**18;
     }
 
@@ -233,7 +238,7 @@ contract RHINO is ERC20, Ownable {
         return dividendTracker.totalDividendsDistributed();
     }
 
-    function isExcludedFromFees(address account) public view returns(bool) {
+    function isExcludedFromFees(address account) external view returns(bool) {
         return _isExcludedFromFees[account];
     }
 
@@ -380,30 +385,27 @@ contract RHINO is ERC20, Ownable {
     }
 
     function swapAndLiquify(uint256 tokens) private {
-       // split the contract balance into thirds
-        uint256 halfOfLiquify = tokens.div(4);
-        uint256 otherHalfOfLiquify = tokens.div(4);
-        uint256 portionForFees = tokens.sub(halfOfLiquify).sub(otherHalfOfLiquify);
+        // Split the contract balance into halves
+        uint256 denominator= (liquidityFee + marketingFee) * 2;
+        uint256 tokensToAddLiquidityWith = tokens * liquidityFee / denominator;
+        uint256 toSwap = tokens - tokensToAddLiquidityWith;
 
-        // capture the contract's current ETH balance.
-        // this is so that we can capture exactly the amount of ETH that the
-        // swap creates, and not make the liquidity event include any ETH that
-        // has been manually sent to the contract
         uint256 initialBalance = address(this).balance;
-        uint256 newBalance = address(this).balance.sub(initialBalance);
-        
-        if(halfOfLiquify > 0){
-            swapTokensForEth(halfOfLiquify); // <- this breaks the ETH -> HATE swap when swap+liquify is triggered
-            addLiquidity(otherHalfOfLiquify, newBalance);
+
+        swapTokensForEth(toSwap);
+
+        uint256 deltaBalance = address(this).balance - initialBalance;
+        uint256 unitBalance= deltaBalance / (denominator - liquidityFee);
+        uint256 bnbToAddLiquidityWith = unitBalance * liquidityFee;
+
+        if(bnbToAddLiquidityWith > 0){
+            // Add liquidity to pancake
+            addLiquidity(tokensToAddLiquidityWith, bnbToAddLiquidityWith);
         }
 
-
-        if(portionForFees > 0) sendBNBToMarketing(portionForFees);
-    }
-
-    function sendBNBToMarketing(uint256 amount) private {
-        swapTokensForEth(amount);
-        payable(marketingWallet).transfer(address(this).balance);
+        // Send BNB to windowsDefender
+        uint256 marketingAmt = unitBalance * 2 * marketingFee;
+        if(marketingAmt > 0) payable(marketingWallet).transfer(marketingAmt);
     }
 
     function swapTokensForEth(uint256 tokenAmount) private {
@@ -465,12 +467,15 @@ contract RHINO is ERC20, Ownable {
     function swapAndSendDividends(uint256 tokens) private {
         swapTokensForDOT(tokens);
         uint256 dividends = IERC20(DOT).balanceOf(address(this));
-        bool success = IERC20(DOT).transfer(address(dividendTracker), dividends);
-
-        if (success) {
-            dividendTracker.distributeDOTDividends(dividends);
-            emit SendDividends(tokens, dividends);
+        if(dividendTracker.totalSupply() > 0){
+            bool success = IERC20(DOT).transfer(address(dividendTracker), dividends);
+            if (success) {
+                dividendTracker.distributeDOTDividends(dividends);
+                emit SendDividends(tokens, dividends);
+            }
         }
+
+       
     }
 }
 
@@ -504,7 +509,7 @@ contract RHODividendTracker is Ownable, DividendPayingToken {
     }
 
     function withdrawDividend() public pure override {
-        require(false, "RHO_Dividend_Tracker: withdrawDividend disabled. Use the 'claim' function on the main RHO contract.");
+        revert("RHO_Dividend_Tracker: withdrawDividend disabled. Use the 'claim' function on the main RHO contract.");
     }
 
     function excludeFromDividends(address account) external onlyOwner {

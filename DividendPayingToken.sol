@@ -124,18 +124,6 @@ contract DividendPayingToken is ERC20, Ownable, DividendPayingTokenInterface, Di
       .add(magnifiedDividendCorrections[_owner]).toUint256Safe() / magnitude;
   }
 
-  /// @dev Internal function that transfer tokens from one address to another.
-  /// Update magnifiedDividendCorrections to keep dividends unchanged.
-  /// @param from The address to transfer from.
-  /// @param to The address to transfer to.
-  /// @param value The amount to be transferred.
-  function _transfer(address from, address to, uint256 value) internal virtual override {
-    require(false);
-
-    int256 _magCorrection = magnifiedDividendPerShare.mul(value).toInt256Safe();
-    magnifiedDividendCorrections[from] = magnifiedDividendCorrections[from].add(_magCorrection);
-    magnifiedDividendCorrections[to] = magnifiedDividendCorrections[to].sub(_magCorrection);
-  }
 
   /// @dev Internal function that mints tokens to an account.
   /// Update magnifiedDividendCorrections to keep dividends unchanged.
